@@ -3,6 +3,14 @@
 // Bob!k & Raster, C.P.U., 2008
 //*****************************************************************************
 
+// Changes:
+// 2009-06-01 Matthias Reichl <hias@horus.com>
+// - USART_Transmit_Byte waits for end of transmission at Pokey divisors 0 - 3.
+//
+// 2009-06-02 Matthias Reichl <hias@horus.com>
+// - replaced USART_Transmit_Byte with bit-banging implementation to work around
+//   POKEY awkwardness and to closely match PAL speed with the 14.318MHz crystal
+
 #include <avr/io.h>			// include I/O definitions (port names, pin names, etc)
 #include <avr/interrupt.h>	// include interrupt support
 #include <avr/pgmspace.h>
@@ -26,6 +34,8 @@ extern void Delay200us();
 extern void Delay800us();
 extern void Delay1000us();
 
+extern void DelayAtariX(unsigned short ataricycles);
+
 //F_CPU = 14318180
 //UBRR = (F_CPU/16/BAUD)-1
 //BAUD = (F_CPU/16/(UBRR+1)
@@ -37,7 +47,11 @@ extern void Delay1000us();
 
 #define US_POKEY_DIV_DEFAULT	0x06		//#6   => 68838 bps
 
-#define US_POKEY_DIV_MAX		(255-6)		//pokeydiv 249 => avrspeed 255 (vic nemuze)
+// Hias: bit-banging serial code limits maximum divisor to 119:
+// avrspeed = divisor + 6 = 125
+// bit-bang-delay = 2*avrspeed = 250
+// start-bit-delay = bit-bang-delay + 5 = 255
+#define US_POKEY_DIV_MAX		119
 
 /*
 #define SIOSPEED_MODES	9	//pocet fastsio_mode=0..8
@@ -125,6 +139,10 @@ extern u32 debug_endofvariables;
 
 unsigned char last_key;
 
+// tx_checksum is automatically updated by the bit-banging
+// USART_Transmit_Byte routine
+unsigned char tx_checksum;
+
 unsigned char get_checksum(unsigned char* buffer, u16 len)
 {
 	u16 i;
@@ -159,12 +177,29 @@ void USART_Init( u08 value )
 	UBRRH = 0;	//HB =0
 	UBRRL = value;
 
+/* parameters for bit-banging serial transmission: */
+/* total bit duration is 17+bit_delay*8 Atmel cycles */
+/* value is pokey divisor plus 6, so we have to multiply it */
+/* by 2 to get the correct delay: */
+	//bit_delay = 2*value;
+
+/* stretch start bit by 5 Atari cycles (40 Atmel cycles) */
+/* to account for awkward pokey sampling (shifted by 5 cycles) */
+	//start_bit_delay = bit_delay + 5;
+
 	/* Set double speed flag */
 	//	UCSRA = (1<<UDRE)|(1<<U2X); //double speed
 	UCSRA = (1<<UDRE);
 
 	/* Enable Receiver and Transmitter */
-	UCSRB = (1<<RXEN)|(1<<TXEN);
+	/* UCSRB = (1<<RXEN)|(1<<TXEN); */
+
+	/* Enable Receiver */
+	UCSRB = (1<<RXEN);
+
+	/* set TxD high (idle) */
+	sbi(PORTD, PIND1);
+
 	/* Set frame format: 8data, 1stop bit */
 	UCSRC = (1<<URSEL)|(1<<UCSZ1)|(1<<UCSZ0);
 
@@ -175,14 +210,8 @@ void USART_Init( u08 value )
 	}
 }
 
-void USART_Transmit_Byte( unsigned char data )
-{
-	/* Wait for empty transmit buffer */
-	while ( !( UCSRA & (1<<UDRE)) )	;
-
-	/* Put data into buffer, sends the data */
-	UDR = data;
-}
+/* use bit-banging implementation */
+extern void USART_Transmit_Byte( unsigned char data );
 
 unsigned char USART_Receive_Byte( void )
 {
@@ -280,8 +309,6 @@ u08 USART_Get_atari_sector_buffer_and_check_and_send_ACK_or_NACK(u16 len)
 
 void USART_Send_cmpl_and_atari_sector_buffer_and_check_sum(unsigned short len)
 {
-	u08 check_sum;
-
 	//	Delay300us();	//po ACKu pred CMPL pauza 250us - 255sec
 	//	Delay300us();	//po ACKu pred CMPL pauza 250us - 255sec
 	//Kdyz bylo jen 300us tak nefungovalo
@@ -294,9 +321,11 @@ void USART_Send_cmpl_and_atari_sector_buffer_and_check_sum(unsigned short len)
 	//Delay800us();	//t6
 	Delay200us();	//<--pouziva se i u commandu 3F
 
+	tx_checksum = 0;
 	USART_Send_Buffer(atari_sector_buffer,len);
-	check_sum = get_checksum(atari_sector_buffer,len);
-	USART_Transmit_Byte(check_sum);
+	// tx_checksum is updated by bit-banging USART_Transmit_Byte,
+	// so we can skip separate calculation
+	USART_Transmit_Byte(tx_checksum);
 }
 
 u08 mmcWriteCached(unsigned char force);
@@ -459,7 +488,7 @@ void set_display(unsigned char n)
 //uint8_t EEMEM system_atr_name[]={"SDRIVE  ATR"};
 // =eeprom_read_byte(&system_atr_name[idx]);
 //
-uint8_t EEMEM system_info[]="SDrive01 20081012 Bob!k & Raster, C.P.U.";	//SDriveVersion info
+uint8_t EEMEM system_info[]="SDrive01 20090605H Bob!k & Raster,C.P.U.";	//SDriveVersion info
 //                                 VVYYYYMMDD
 //                                 VV cislo nove oficialne vydane verze, meni se jen pri vydani noveho oficialniho firmware
 //									  s rozsirenymi/zmenenymi funkcemi zpetne nekompatibilni
@@ -578,6 +607,9 @@ int main(void)
 
 	cbi(DDRB,0); // KEY_pin input
 	cbi(DDRB,1); // KEY_pin input
+
+	sbi(DDRD,1); // Bit-Banging TxD output
+	sbi(PORTD,1); // set high/idle
 
 	cbi(DDRD,2); // KEY_pin input
 	cbi(DDRD,3); // KEY_pin input
