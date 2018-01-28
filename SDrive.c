@@ -23,6 +23,10 @@
 //
 // 2009-06-20 Matthias Reichl <hias@horus.com>
 // - fixed enhanced density formatting issues
+//
+// 2009-07-01 Matthias Reichl <hias@horus.com>
+// - fixed enhanced density flag in get status (it was set for all images
+//   larger than 720 sectors before)
 
 #include <avr/io.h>			// include I/O definitions (port names, pin names, etc)
 #include <avr/interrupt.h>	// include interrupt support
@@ -505,7 +509,7 @@ void set_display(unsigned char n)
 //uint8_t EEMEM system_atr_name[]={"SDRIVE  ATR"};
 // =eeprom_read_byte(&system_atr_name[idx]);
 //
-uint8_t EEMEM system_info[]="SDrive01 20090620H Bob!k & Raster,C.P.U.";	//SDriveVersion info
+uint8_t EEMEM system_info[]="SDrive01 20090705H Bob!k & Raster,C.P.U.";	//SDriveVersion info
 //                                 VVYYYYMMDD
 //                                 VV cislo nove oficialne vydane verze, meni se jen pri vydani noveho oficialniho firmware
 //									  s rozsirenymi/zmenenymi funkcemi zpetne nekompatibilni
@@ -596,6 +600,19 @@ struct SDriveParameters
 #define bootloader_relocation sdrparams.p3
 #define extraSDcommands_readwritesectornumber	sdrparams.p4_5_6_7
 
+void setAtrVdiskFlags()
+{
+	faccess_offset(FILE_ACCESS_READ,0,16); //ATR hlavicka vzdy
+
+	FileInfo.vDisk.flags=FLAGS_DRIVEON;
+	if ( (atari_sector_buffer[4]|atari_sector_buffer[5])==0x01 ) {
+		FileInfo.vDisk.flags|=FLAGS_ATRDOUBLESECTORS;
+	} else {
+		if (FileInfo.vDisk.size == (((unsigned long)1040)*128 + 16)) {
+			FileInfo.vDisk.flags|=FLAGS_ATRMEDIUMSIZE;
+		}
+	}
+}
 
 //----- Begin Code ------------------------------------------------------------
 int main(void)
@@ -744,22 +761,8 @@ SET_SDRIVEATR_TO_D0:	//pro nastaveni SDRIVE.ATR do vD0: bez zmeny actual_drive_n
 			FileInfo.vDisk.ncluster=0;
 			//FileInfo.vDisk.file_index = i; //dela se uvnitr fatGetDirEntry
 
-			faccess_offset(FILE_ACCESS_READ,0,16); //ATR hlavicka vzdy
+			setAtrVdiskFlags();
 
-			FileInfo.vDisk.flags=FLAGS_DRIVEON;
-			if ( (atari_sector_buffer[4]|atari_sector_buffer[5])==0x01 )
-				FileInfo.vDisk.flags|=FLAGS_ATRDOUBLESECTORS;
-
-			{
-				unsigned long compute;
-				unsigned long tmp;
-
-				compute = FileInfo.vDisk.size - 16;		//je to vzdy ATR
-				tmp = (FileInfo.vDisk.flags & FLAGS_ATRDOUBLESECTORS)? 0x100:0x80;
-				compute /=tmp;
-
-				if(compute>720) FileInfo.vDisk.flags|=FLAGS_ATRMEDIUMSIZE;
-			}
 			goto find_sdrive_atr_finished;
 			//
 find_sdrive_atr_next_entry:
@@ -2165,21 +2168,7 @@ Command_EC_F0_FF_found:
 							 atari_sector_buffer[9]=='T' &&
 							  atari_sector_buffer[10]=='R' )
 						{
-							// ATR
-							unsigned long compute;
-							unsigned long tmp;
-
-							faccess_offset(FILE_ACCESS_READ,0,16); //je to ATR
-									
-							FileInfo.vDisk.flags=FLAGS_DRIVEON;
-							//FileInfo.vDisk.atr_sector_size = (atari_sector_buffer[4]+(atari_sector_buffer[5]<<8));
-							if ( (atari_sector_buffer[4]|atari_sector_buffer[5])==0x01 )
-								FileInfo.vDisk.flags|=FLAGS_ATRDOUBLESECTORS;
-
-							compute = FileInfo.vDisk.size - 16;		//je to ATR
-							tmp = (FileInfo.vDisk.flags & FLAGS_ATRDOUBLESECTORS)? 0x100:0x80;		//FileInfo.vDisk.atr_sector_size;
-							compute /=tmp;
-							if(compute>720) FileInfo.vDisk.flags|=FLAGS_ATRMEDIUMSIZE; //atr_medium_size = 0x80;
+							setAtrVdiskFlags();
 						}
 						else
 						if( atari_sector_buffer[8]=='X' &&
