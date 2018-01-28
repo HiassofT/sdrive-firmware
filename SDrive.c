@@ -20,6 +20,9 @@
 //
 // 2009-06-19 Matthias Reichl <hias@horus.com>
 // - fixed MyDos formatting issues (removed percomstate=0 from GetStatus)
+//
+// 2009-06-20 Matthias Reichl <hias@horus.com>
+// - fixed enhanced density formatting issues
 
 #include <avr/io.h>			// include I/O definitions (port names, pin names, etc)
 #include <avr/interrupt.h>	// include interrupt support
@@ -502,7 +505,7 @@ void set_display(unsigned char n)
 //uint8_t EEMEM system_atr_name[]={"SDRIVE  ATR"};
 // =eeprom_read_byte(&system_atr_name[idx]);
 //
-uint8_t EEMEM system_info[]="SDrive01 20090619H Bob!k & Raster,C.P.U.";	//SDriveVersion info
+uint8_t EEMEM system_info[]="SDrive01 20090620H Bob!k & Raster,C.P.U.";	//SDriveVersion info
 //                                 VVYYYYMMDD
 //                                 VV cislo nove oficialne vydane verze, meni se jen pri vydani noveho oficialniho firmware
 //									  s rozsirenymi/zmenenymi funkcemi zpetne nekompatibilni
@@ -1040,7 +1043,7 @@ format_medium:
 			case 0x22: // format medium
 				// 	Formats medium density on an Atari 1050. Format medium density cannot be achieved via PERCOM block settings!
 
-				if ( (FileInfo.vDisk.flags & (FLAGS_ATRMEDIUMSIZE | FLAGS_READONLY) != FLAGS_ATRMEDIUMSIZE) )
+				if ( (FileInfo.vDisk.flags & (FLAGS_ATRMEDIUMSIZE | FLAGS_READONLY) ) != FLAGS_ATRMEDIUMSIZE )
 				{
 					//FileInfo.percomstate=0;
 					//goto Send_ERR_and_Delay;
