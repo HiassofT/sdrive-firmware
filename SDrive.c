@@ -17,6 +17,9 @@
 // 2009-06-09 Matthias Reichl <hias@horus.com>
 // - changed delay between Complete and Data frame from 200us to 100us
 //   to fix problems with QMEG OS 3
+//
+// 2009-06-19 Matthias Reichl <hias@horus.com>
+// - fixed MyDos formatting issues (removed percomstate=0 from GetStatus)
 
 #include <avr/io.h>			// include I/O definitions (port names, pin names, etc)
 #include <avr/interrupt.h>	// include interrupt support
@@ -499,7 +502,7 @@ void set_display(unsigned char n)
 //uint8_t EEMEM system_atr_name[]={"SDRIVE  ATR"};
 // =eeprom_read_byte(&system_atr_name[idx]);
 //
-uint8_t EEMEM system_info[]="SDrive01 20090609H Bob!k & Raster,C.P.U.";	//SDriveVersion info
+uint8_t EEMEM system_info[]="SDrive01 20090619H Bob!k & Raster,C.P.U.";	//SDriveVersion info
 //                                 VVYYYYMMDD
 //                                 VV cislo nove oficialne vydane verze, meni se jen pri vydani noveho oficialniho firmware
 //									  s rozsirenymi/zmenenymi funkcemi zpetne nekompatibilni
@@ -1442,7 +1445,7 @@ set_number_of_sectors_to_buffer_1_2:
 
 			case 0x53:	//get status
 
-				FileInfo.percomstate=0;
+				//FileInfo.percomstate=0;
 
 				atari_sector_buffer[0] = 0x10;	//0x00 motor off	0x10 motor on
 				if (FileInfo.vDisk.flags & FLAGS_ATRMEDIUMSIZE) atari_sector_buffer[0]|=0x80;		//(FileInfo.vDisk.atr_medium_size);	// medium/single
