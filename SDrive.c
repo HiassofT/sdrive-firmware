@@ -10,6 +10,10 @@
 // 2009-06-02 Matthias Reichl <hias@horus.com>
 // - replaced USART_Transmit_Byte with bit-banging implementation to work around
 //   POKEY awkwardness and to closely match PAL speed with the 14.318MHz crystal
+//
+// 2009-06-09 Matthias Reichl <hias@horus.com>
+// - changed delay between Complete and Data frame from 200us to 100us
+//   to fix problems with QMEG OS 3
 
 #include <avr/io.h>			// include I/O definitions (port names, pin names, etc)
 #include <avr/interrupt.h>	// include interrupt support
@@ -319,7 +323,11 @@ void USART_Send_cmpl_and_atari_sector_buffer_and_check_sum(unsigned short len)
 						//(tato fce se pouziva se i u read SpeedIndex 3F,
 						// coz s delsi pauzou nefunguje (pod Qmegem3 fast)
 	//Delay800us();	//t6
-	Delay200us();	//<--pouziva se i u commandu 3F
+	//Delay200us();	//<--pouziva se i u commandu 3F
+
+	// Hias: changed to 100us so that Qmeg3 works again with the
+	// new bit-banging transmission code
+	Delay100us();
 
 	tx_checksum = 0;
 	USART_Send_Buffer(atari_sector_buffer,len);
