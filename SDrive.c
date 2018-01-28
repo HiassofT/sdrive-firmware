@@ -11,6 +11,9 @@
 // - replaced USART_Transmit_Byte with bit-banging implementation to work around
 //   POKEY awkwardness and to closely match PAL speed with the 14.318MHz crystal
 //
+// 2009-06-08 Matthias Reichl <hias@horus.com>
+// - Honor read-only attribute of (image-) files
+//
 // 2009-06-09 Matthias Reichl <hias@horus.com>
 // - changed delay between Complete and Data frame from 200us to 100us
 //   to fix problems with QMEG OS 3
@@ -496,7 +499,7 @@ void set_display(unsigned char n)
 //uint8_t EEMEM system_atr_name[]={"SDRIVE  ATR"};
 // =eeprom_read_byte(&system_atr_name[idx]);
 //
-uint8_t EEMEM system_info[]="SDrive01 20090605H Bob!k & Raster,C.P.U.";	//SDriveVersion info
+uint8_t EEMEM system_info[]="SDrive01 20090609H Bob!k & Raster,C.P.U.";	//SDriveVersion info
 //                                 VVYYYYMMDD
 //                                 VV cislo nove oficialne vydane verze, meni se jen pri vydani noveho oficialniho firmware
 //									  s rozsirenymi/zmenenymi funkcemi zpetne nekompatibilni
@@ -979,7 +982,7 @@ format_medium:
 					FileInfo.percomstate=0; //po prvnim formatu pozbyva percom ucinnost
 
 					//XEX formatovat nelze
-					if (FileInfo.vDisk.flags & FLAGS_XEXLOADER)
+					if (FileInfo.vDisk.flags & (FLAGS_XEXLOADER | FLAGS_READONLY))
 					{
 						goto Send_NACK_and_set_FLAGS_WRITEERROR_and_ST_IDLE;
 					}
@@ -1034,7 +1037,7 @@ format_medium:
 			case 0x22: // format medium
 				// 	Formats medium density on an Atari 1050. Format medium density cannot be achieved via PERCOM block settings!
 
-				if (! (FileInfo.vDisk.flags & FLAGS_ATRMEDIUMSIZE))
+				if ( (FileInfo.vDisk.flags & (FLAGS_ATRMEDIUMSIZE | FLAGS_READONLY) != FLAGS_ATRMEDIUMSIZE) )
 				{
 					//FileInfo.percomstate=0;
 					//goto Send_ERR_and_Delay;
@@ -1309,7 +1312,7 @@ percom_prepared:
 							break;
 						}
 
-						if ( get_readonly() )
+						if ( get_readonly() || (FileInfo.vDisk.flags & FLAGS_READONLY) )
 							 goto Send_ERR_and_Delay; //READ ONLY
 
 						proceeded_bytes = faccess_offset(FILE_ACCESS_WRITE,n_data_offset,atari_sector_size);
@@ -1450,7 +1453,7 @@ set_number_of_sectors_to_buffer_1_2:
 				 //vynuluje FLAGS_WRITEERROR bit
 				 FileInfo.vDisk.flags &= (~FLAGS_WRITEERROR);
 				}
-				if (get_readonly()) atari_sector_buffer[0]|=0x08;	//write protected bit
+				if ( get_readonly() || (FileInfo.vDisk.flags & FLAGS_READONLY) ) atari_sector_buffer[0]|=0x08;	//write protected bit
 
 				atari_sector_buffer[1] = 0xff;
 				atari_sector_buffer[2] = 0xe0; 		//(244s) timeout pro nejdelsi operaci
@@ -2197,7 +2200,10 @@ Command_EC_F0_FF_found:
 						else
 						{
 							// XEX
-							FileInfo.vDisk.flags=FLAGS_DRIVEON|FLAGS_XEXLOADER|FLAGS_ATRMEDIUMSIZE;
+							FileInfo.vDisk.flags=FLAGS_DRIVEON|FLAGS_XEXLOADER|FLAGS_ATRMEDIUMSIZE|FLAGS_READONLY;
+						}
+						if (FileInfo.Attr & ATTR_READONLY) {
+							FileInfo.vDisk.flags |= FLAGS_READONLY;
 						}
 					}
 
